@@ -1,0 +1,12 @@
+<details class="profile-menu sidebar-profile">
+  <summary class="profile-trigger" data-sidebar-tooltip="Profile menu" aria-label="Profile menu">
+    <span class="userchip">{{ request.user.username|first|upper }}</span>
+    <span class="profile-copy"><span class="account-name">{{ request.user.get_full_name|default:request.user.username }}</span><small>{% if request.user.is_superuser %}Superuser{% elif request.user.access_role %}{{ request.user.access_role.name }}{% else %}{{ request.user.get_role_display }}{% endif %}</small></span>
+    <svg class="profile-caret" viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7.5 5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </summary>
+  <div class="profile-dropdown">
+    <div class="profile-identity"><span class="userchip">{{ request.user.username|first|upper }}</span><div class="profile-identity-copy"><strong>{{ request.user.get_full_name|default:request.user.username }}</strong><small>@{{ request.user.username }} · {% if request.user.is_superuser %}Superuser{% elif request.user.access_role %}{{ request.user.access_role.name }}{% else %}{{ request.user.get_role_display }}{% endif %}</small></div></div>
+    <div class="profile-menu-divider"></div>
+    <a href="{% url 'profile_edit' %}"><span class="profile-action-icon">{% include "monitors/icon.html" with name="profile" %}</span><span class="profile-action-copy"><strong>Edit profile</strong></span></a>
+  </div>
+</details>

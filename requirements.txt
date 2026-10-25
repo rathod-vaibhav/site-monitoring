@@ -1,0 +1,4 @@
+Django>=5.2,<5.3
+httpx>=0.28,<1
+gunicorn>=23,<24
+python-decouple>=3.8,<4

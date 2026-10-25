@@ -1,0 +1,22 @@
+<style>
+.breadcrumbs{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 18px;color:#69758c;font-size:12px;line-height:1.4}.breadcrumbs a{color:#5f6b7d;text-decoration:none}.breadcrumbs a:hover{color:#1a73e8}.breadcrumbs .breadcrumb-separator{color:#aab2bf}.breadcrumbs [aria-current=page]{color:#202124;font-weight:600}
+</style>
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+  <a href="{% url 'dashboard' %}">Home</a><span class="breadcrumb-separator" aria-hidden="true">›</span>
+  {% with current=request.resolver_match.url_name %}
+    {% if current == "dashboard" %}<span aria-current="page">Overview</span>
+    {% elif current == "projects_page" %}<span aria-current="page">Projects</span>
+    {% elif current == "project_detail" %}<a href="{% url 'projects_page' %}">Projects</a><span class="breadcrumb-separator" aria-hidden="true">›</span><span aria-current="page">{{ project.name }}</span>
+    {% elif current == "project_create" or current == "project_edit" %}<a href="{% url 'projects_page' %}">Projects</a><span class="breadcrumb-separator" aria-hidden="true">›</span><span aria-current="page">{{ title }}</span>
+    {% elif current == "monitors_page" %}<span aria-current="page">Monitors</span>
+    {% elif current == "monitor_detail" %}<a href="{% url 'monitors_page' %}">Monitors</a><span class="breadcrumb-separator" aria-hidden="true">›</span><span aria-current="page">{{ monitor.name }}</span>
+    {% elif current == "monitor_create" or current == "monitor_edit" %}<a href="{% url 'monitors_page' %}">Monitors</a><span class="breadcrumb-separator" aria-hidden="true">›</span><span aria-current="page">{{ title }}</span>
+    {% elif current == "incidents_page" %}<span aria-current="page">Incidents</span>
+    {% elif current == "settings_home" %}<span aria-current="page">Settings</span>
+    {% elif current == "email_templates_page" %}<a href="{% url 'settings_home' %}">Settings</a><span class="breadcrumb-separator" aria-hidden="true">›</span><span aria-current="page">Email templates</span>
+    {% elif current == "team_users" or current == "team_user_edit" or current == "team_user_toggle" or current == "team_user_delete" %}<a href="{% url 'settings_home' %}">Settings</a><span class="breadcrumb-separator" aria-hidden="true">›</span>{% if current == "team_users" %}<span aria-current="page">Team members</span>{% else %}<a href="{% url 'team_users' %}">Team members</a><span class="breadcrumb-separator" aria-hidden="true">›</span><span aria-current="page">{% if person %}Edit {{ person.username }}{% else %}Team member{% endif %}</span>{% endif %}
+    {% elif current == "roles_page" or current == "role_create" or current == "role_edit" %}<a href="{% url 'settings_home' %}">Settings</a><span class="breadcrumb-separator" aria-hidden="true">›</span>{% if current == "roles_page" %}<span aria-current="page">Roles &amp; permissions</span>{% else %}<a href="{% url 'roles_page' %}">Roles &amp; permissions</a><span class="breadcrumb-separator" aria-hidden="true">›</span><span aria-current="page">{{ title }}</span>{% endif %}
+    {% elif current == "profile_edit" %}<span aria-current="page">Profile</span>
+    {% else %}<span aria-current="page">Workspace</span>{% endif %}
+  {% endwith %}
+</nav>

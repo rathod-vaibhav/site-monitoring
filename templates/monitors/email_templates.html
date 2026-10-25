@@ -1,0 +1,72 @@
+{% extends "monitors/base.html" %}
+{% block title %}Email templates · Settings{% endblock %}
+{% block content %}
+<style>
+.email-settings{display:grid;gap:18px}.email-settings-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px}.email-settings-head h1{margin:0;font-size:26px;line-height:1.2}.email-settings-head p{margin:5px 0 0;color:var(--muted);font-size:13px}.email-template-tabs{display:flex;gap:7px;padding:5px;border:1px solid var(--line);border-radius:10px;background:#fff}.email-template-tabs a{padding:8px 12px;border-radius:7px;color:var(--muted);font-size:11px;font-weight:650;text-decoration:none}.email-template-tabs a.active{background:#e8f0fe;color:#1a73e8}.email-template-layout{display:grid;grid-template-columns:minmax(360px,.85fr) minmax(440px,1.15fr);gap:16px;align-items:start}.email-template-editor,.email-template-preview{min-width:0;padding:19px;border:1px solid var(--line);border-radius:13px;background:#fff;box-shadow:var(--shadow)}.email-template-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px}.email-template-panel-head h2{margin:0;font-size:15px}.email-template-panel-head p{margin:4px 0 0;color:var(--muted);font-size:11px;line-height:1.5}.email-template-preview-frame{display:block;width:100%;height:680px;border:1px solid #e1e5ef;border-radius:10px;background:#f3f5f8}.email-template-editor .form-card{padding:0;border:0;background:transparent;box-shadow:none}.email-template-editor form{display:grid;grid-template-columns:1fr 1fr;gap:12px}.email-template-editor .field{display:grid;align-content:start;gap:5px;min-width:0}.email-template-editor .field.wide{grid-column:1/-1}.email-template-editor label{font-size:11px;font-weight:650;color:var(--ink)}.email-template-editor input,.email-template-editor textarea{width:100%;padding:9px 10px;border:1px solid #d7dce5;border-radius:8px;background:#fff;color:var(--ink);font:inherit;font-size:11px;line-height:1.5}.email-template-editor textarea{resize:vertical;min-height:64px}.email-template-editor input:focus,.email-template-editor textarea:focus{outline:0;border-color:#1a73e8;box-shadow:0 0 0 3px #1a73e81a}.email-template-editor .helptext{color:var(--muted);font-size:9px;line-height:1.5}.email-template-editor .errorlist{margin:0;padding-left:15px;color:#c5221f;font-size:10px}.email-template-tokens{grid-column:1/-1;padding:10px 11px;border-radius:8px;background:#f5f8fc;color:#596579;font-size:10px;line-height:1.55}.email-template-tokens code{color:#1d4ed8;font-size:10px}.email-template-actions{grid-column:1/-1;display:flex;align-items:center;gap:9px;padding-top:4px}.email-template-actions .btn{min-width:110px}.email-template-preview-status{color:#738096;font-size:10px}@media(max-width:1000px){.email-template-layout{grid-template-columns:1fr}.email-template-preview-frame{height:640px}}@media(max-width:650px){.email-settings-head{align-items:flex-start;flex-direction:column}.email-template-editor form{grid-template-columns:1fr}.email-template-editor .field.wide,.email-template-tokens,.email-template-actions{grid-column:1}.email-template-preview-frame{height:600px}}
+.email-template-list{overflow:hidden;border:1px solid var(--line);border-radius:13px;background:#fff;box-shadow:var(--shadow)}.email-template-list-head,.email-template-row{display:grid;grid-template-columns:minmax(190px,1fr) minmax(220px,1.4fr) 120px;align-items:center;gap:18px;padding:14px 18px}.email-template-list-head{background:#f8fafc;color:#596579;font-size:10px;font-weight:700;border-bottom:1px solid var(--line)}.email-template-row+.email-template-row{border-top:1px solid var(--line)}.email-template-row strong{display:block;color:var(--ink);font-size:13px}.email-template-row small{display:block;margin-top:4px;color:var(--muted);font-size:10px;overflow-wrap:anywhere}.email-template-trigger{display:inline-flex;align-items:center;gap:8px;width:max-content;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:700}.email-template-trigger.down{background:#fff0f0;color:#bd343d}.email-template-trigger.recovered{background:#eaf8f1;color:#178253}.html-source-editor{min-height:480px!important;resize:vertical!important;white-space:pre!important;overflow:auto!important;font-family:Consolas,"SFMono-Regular",monospace!important;font-size:12px!important;line-height:1.55!important;tab-size:2}.email-template-editor form{grid-template-columns:1fr}.email-template-editor .field.wide,.email-template-editor .field{grid-column:1}.email-template-actions{position:sticky;bottom:0;padding:12px;background:#fff;border-top:1px solid var(--line);z-index:1}.email-template-preview-frame{height:760px}@media(max-width:700px){.email-template-list-head{display:none}.email-template-row{grid-template-columns:1fr auto;gap:10px}.email-template-trigger{grid-column:1}.email-template-row .btn{grid-column:2;grid-row:1/3}}
+.email-template-trigger.attention{background:#fff6e5;color:#b06000}
+</style>
+<main class="email-settings">
+  <header class="email-settings-head">
+    <div><div class="eyebrow">Workspace settings</div><h1>{% if is_edit_mode %}Edit email template{% else %}Email templates{% endif %}</h1><p>{% if is_edit_mode %}Update the alert message and check the rendered email before saving.{% else %}Choose an alert template to edit and preview.{% endif %}</p></div>
+    {% if is_edit_mode %}<a class="btn secondary" href="{% url 'email_templates_page' %}">← Back to templates</a>{% endif %}
+  </header>
+  {% if not is_edit_mode %}
+  <section class="email-template-list" aria-label="Email templates">
+    <div class="email-template-list-head"><span>Template</span><span>Subject</span><span>Action</span></div>
+    {% for item in email_templates %}<article class="email-template-row"><div><strong>{{ item.label }} notification</strong><small>Shared across every project</small></div><div><span class="email-template-trigger {% if item.event == 'DOWN' %}down{% elif item.event == 'ATTENTION' %}attention{% else %}recovered{% endif %}">{% if item.event == 'DOWN' %}Down · Red{% elif item.event == 'ATTENTION' %}Needs attention · Orange{% else %}Recovered · Green{% endif %}</span><small>{{ item.template.subject }}</small></div><a class="btn secondary" href="?event={{ item.event }}&edit=1">Edit HTML</a></article>{% endfor %}
+  </section>
+  {% else %}
+  <div class="email-template-layout">
+    <section class="email-template-editor" aria-labelledby="template-editor-title">
+      <div class="email-template-panel-head"><div><h2 id="template-editor-title">{{ email_template.get_event_display }} notification</h2><p>Paste or edit the complete HTML email. This template is shared across every project.</p></div></div>
+      <div class="form-card">
+        <form id="email-template-form" method="post" action="?event={{ selected_event }}&edit=1" data-preview-url="{% url 'email_template_preview' %}">
+          {% csrf_token %}<input type="hidden" name="event" value="{{ selected_event }}">
+          {% for field in form %}<div class="field wide"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}{{ field.errors }}</div>{% endfor %}
+          <div class="email-template-tokens">HTML placeholders: <code>&#123;&#123; service &#125;&#125;</code> <code>&#123;&#123; project &#125;&#125;</code> <code>&#123;&#123; status &#125;&#125;</code> <code>&#123;&#123; details &#125;&#125;</code> <code>&#123;&#123; site_url &#125;&#125;</code> <code>&#123;&#123; monitor_link &#125;&#125;</code> <code>&#123;&#123; event_time &#125;&#125;</code> <code>&#123;&#123; down_since &#125;&#125;</code> <code>&#123;&#123; downtime &#125;&#125;</code> <code>&#123;&#123; check_interval &#125;&#125;</code>. Use <code>&#123;&#123; monitor_link &#125;&#125;</code> to link to this service in Site Monitoring. Times use the configured workspace timezone; values are HTML-escaped.</div>
+          <div class="email-template-actions"><button class="btn" type="submit">Save template</button><span class="email-template-preview-status" id="email-preview-status" aria-live="polite">Preview updates as you type.</span></div>
+        </form>
+      </div>
+    </section>
+    <section class="email-template-preview" aria-labelledby="email-preview-title">
+      <div class="email-template-panel-head"><div><h2 id="email-preview-title">Live HTML preview</h2><p>Sample service: BETA ASM · Project: ASM Sparrow</p></div></div>
+      <iframe id="email-template-preview" class="email-template-preview-frame" title="Live email template preview" sandbox="" srcdoc="{{ preview_html|force_escape }}"></iframe>
+    </section>
+  </div>
+  {% endif %}
+</main>
+<script>
+(() => {
+  const form = document.getElementById('email-template-form');
+  const frame = document.getElementById('email-template-preview');
+  const status = document.getElementById('email-preview-status');
+  if (!form || !frame) return;
+  let timer;
+  let requestId = 0;
+  const refresh = async () => {
+    const currentRequest = ++requestId;
+    status.textContent = 'Updating preview…';
+    try {
+      const response = await fetch(form.dataset.previewUrl, {
+        method: 'POST',
+        headers: {'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value},
+        body: new URLSearchParams(new FormData(form)),
+      });
+      if (!response.ok) throw new Error('Complete the required fields to preview.');
+      const html = await response.text();
+      if (currentRequest === requestId) {
+        frame.srcdoc = html;
+        status.textContent = 'Live preview updated.';
+      }
+    } catch (error) {
+      if (currentRequest === requestId) status.textContent = error.message;
+    }
+  };
+  form.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(refresh, 250);
+  });
+})();
+</script>
+{% endblock %}

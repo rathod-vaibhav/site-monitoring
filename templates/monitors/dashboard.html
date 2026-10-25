@@ -1,0 +1,351 @@
+{% extends "monitors/base.html" %}
+{% block title %}Overview · Site Monitoring{% endblock %}
+{% block content %}
+<main class="overview-dashboard" data-status-url="{% url 'dashboard_status' %}" data-monitors-url="{% url 'monitors_page' %}" data-chart-range="{{ selected_range }}">
+  <header class="overview-heading">
+    <div><span class="overview-eyebrow">Monitoring overview</span><h1>Welcome, {{ request.user.first_name|default:request.user.username }}</h1><p>See service health, recent incidents, and project status in one place.</p></div>
+    <div class="overview-actions">
+      <details class="incident-notifications">
+        <summary aria-label="Recent incidents, {{ counts.incidents }} open"><span class="notification-icon">{% include "monitors/icon.html" with name="bell" %}</span>{% if counts.incidents %}<span class="notification-count" data-notification-count>{{ counts.incidents }}</span>{% endif %}</summary>
+        <section class="notification-popover" aria-label="Recent incidents"><header><div><strong>Recent incidents</strong><small>Latest incident activity</small></div><a href="{% url 'incidents_page' %}">View all</a></header><div class="notification-list">{% for incident in recent_incidents %}<a class="notification-row" href="{% url 'monitor_detail' incident.monitor_id %}"><span class="notification-dot {% if incident.resolved_at %}resolved{% elif incident.acknowledged_at %}monitoring{% else %}open{% endif %}"></span><span><strong>{{ incident.monitor.name }}</strong><small>{{ incident.monitor.project.name }} · {{ incident.started_at|timesince }} ago</small></span><em>{% if incident.resolved_at %}Resolved{% elif incident.acknowledged_at %}Monitoring{% else %}Open{% endif %}</em></a>{% empty %}<p class="notification-empty">No recent incidents.</p>{% endfor %}</div></section>
+      </details>
+      <div class="overview-refresh-controls"><small class="overview-updated">Last updated <time data-dashboard-updated aria-live="off" datetime="{{ dashboard_updated_at|date:'c' }}">{{ dashboard_updated_at|date:'g:i:s A' }}</time></small><div class="overview-refresh-actions"><button type="button" class="overview-refresh-now" data-dashboard-refresh-now>Refresh now</button><label class="overview-refresh-select"><span>Refresh every</span><select data-dashboard-refresh-interval aria-label="Dashboard refresh interval"><option value="60000">1m</option><option value="120000">2m</option><option value="300000">5m</option><option value="600000">10m</option></select></label></div></div>
+    </div>
+  </header>
+
+  <section class="overview-kpis" aria-label="Monitoring summary">
+    <article class="overview-kpi kpi-blue"><span>Total services</span><strong data-dashboard-count="total">{{ counts.total }}</strong><small>Across {{ project_total }} project{{ project_total|pluralize }}</small></article>
+    <article class="overview-kpi kpi-green"><span>Operational</span><strong data-dashboard-count="up">{{ counts.up }}</strong><small>Responding normally</small></article>
+    <article class="overview-kpi kpi-amber"><span>Needs attention</span><strong data-dashboard-count="other">{{ counts.other }}</strong><small>Paused, degraded or unknown</small></article>
+    <article class="overview-kpi kpi-red"><span>Open incidents</span><strong data-dashboard-count="incidents">{{ counts.incidents }}</strong><small>Active incidents</small></article>
+  </section>
+
+  <section class="attention-summary" data-attention-summary data-active-groups="{% if counts.down and counts.other %}2{% elif counts.down or counts.other %}1{% else %}0{% endif %}" {% if counts.total and not counts.down and not counts.other %}hidden{% endif %} aria-live="polite">
+    <div class="attention-group-grid" data-attention-groups>
+      <section class="attention-group attention-group-down" data-attention-group="down" {% if not counts.down %}hidden{% endif %}>
+        <header><div class="attention-summary-message"><span class="attention-indicator" aria-hidden="true"></span><div><strong>Services down</strong><small data-attention-count="down">{{ counts.down }} service{{ counts.down|pluralize }} down</small></div></div><a href="{% url 'monitors_page' %}?status=DOWN">View down services</a></header>
+        <div class="attention-service-list" data-attention-list="down">
+          {% for monitor in down_alert_monitors %}<a class="attention-service down" href="{% url 'monitor_detail' monitor.id %}" data-alert-monitor-id="{{ monitor.id }}"><span class="attention-status">Down</span><strong>{{ monitor.name }}</strong><small>{{ monitor.project.name }}{% if monitor.last_response_ms %} · {{ monitor.last_response_ms }} ms{% endif %}</small></a>{% endfor %}
+        </div>
+      </section>
+      <section class="attention-group attention-group-other" data-attention-group="attention" {% if not counts.other %}hidden{% endif %}>
+        <header><div class="attention-summary-message"><span class="attention-indicator" aria-hidden="true"></span><div><strong>Needs attention</strong><small data-attention-count="attention">{{ counts.other }} service{{ counts.other|pluralize }} need attention</small></div></div><a href="{% url 'monitors_page' %}?status=ATTENTION">View affected services</a></header>
+        <div class="attention-service-list" data-attention-list="attention">
+          {% for monitor in attention_alert_monitors %}<a class="attention-service {% if not monitor.is_active %}paused{% else %}attention{% endif %}" href="{% url 'monitor_detail' monitor.id %}" data-alert-monitor-id="{{ monitor.id }}"><span class="attention-status">{% if not monitor.is_active %}Paused{% else %}{{ monitor.get_status_display }}{% endif %}</span><strong>{{ monitor.name }}</strong><small>{{ monitor.project.name }}{% if monitor.last_response_ms %} · {{ monitor.last_response_ms }} ms{% endif %}</small></a>{% endfor %}
+        </div>
+      </section>
+    </div>
+    <div class="attention-healthy" data-attention-healthy {% if counts.down or counts.other %}hidden{% endif %}><span class="attention-indicator" aria-hidden="true"></span><div><strong data-attention-healthy-heading>{% if counts.total %}All systems operational{% else %}Monitoring not set up{% endif %}</strong><small data-attention-healthy-count>{% if counts.total %}All {{ counts.total }} monitored services responding normally{% else %}Add a service to start monitoring your workspace{% endif %}</small></div><a href="{% url 'monitors_page' %}">View monitors</a></div>
+  </section>
+
+  <section class="overview-grid" aria-label="Workspace health">
+    <article class="overview-card health-card">
+      <div class="overview-card-head"><div><h2>Service health</h2><p>Current availability across monitored services</p></div><span class="overview-chip"><span data-dashboard-count="total">{{ counts.total }}</span> service{{ counts.total|pluralize }}</span></div>
+      <div class="health-content">
+        <div class="health-chart-wrap"><canvas id="service-health-chart" role="img" aria-label="Service health: {{ counts.up }} operational, {{ counts.other }} paused, degraded or unknown, {{ counts.down }} down"></canvas><div class="health-chart-center"><strong data-dashboard-count="total">{{ counts.total }}</strong><span>services</span></div></div>
+        <div class="health-legend">
+          <a href="{% url 'monitors_page' %}?status=UP"><i class="health-dot dot-up"></i><span>Operational</span><strong data-dashboard-count="up">{{ counts.up }}</strong></a>
+          <a href="{% url 'monitors_page' %}?status=ATTENTION"><i class="health-dot dot-attention"></i><span>Paused / degraded / unknown</span><strong data-dashboard-count="other">{{ counts.other }}</strong></a>
+          <a href="{% url 'monitors_page' %}?status=DOWN"><i class="health-dot dot-down"></i><span>Down</span><strong data-dashboard-count="down">{{ counts.down }}</strong></a>
+        </div>
+      </div>
+    </article>
+
+    {% include "monitors/_service_response_chart.html" with chart_id="dashboard-service-chart" chart_title="Service response trends" dashboard_auto_refresh=True %}
+
+    <article class="overview-card projects-card">
+      <div class="overview-card-head"><div><h2>Project health</h2><p>Service status grouped by project</p></div><div class="projects-header-actions">{% if can_manage_projects %}<a class="btn secondary small projects-create-btn" href="{% url 'project_create' %}" data-record-modal data-record-title="Create project">{% include "monitors/icon.html" with name="add" %} Create project</a>{% endif %}<a class="overview-link" href="{% url 'projects_page' %}">All projects →</a></div></div>
+      {% if projects %}<div class="project-grid">{% for project in projects %}<section class="project-panel"><header><span class="project-symbol">{% include "monitors/icon.html" with name="projects" %}</span><span class="project-name"><a href="{% url 'project_detail' project.id %}"><strong>{{ project.name }}</strong></a><small>{{ project.description|default:"Project monitoring" }}</small></span><span class="project-count">{{ project.monitor_count }} service{{ project.monitor_count|pluralize }}</span></header><div class="project-services">{% for monitor in project.preview_monitors %}<a data-dashboard-monitor-id="{{ monitor.id }}" class="project-service {% if monitor.is_active %}{{ monitor.status|lower }}{% else %}paused{% endif %}" href="{% url 'monitor_detail' monitor.id %}"><span class="service-status"><i></i>{% if monitor.is_active %}{{ monitor.get_status_display }}{% else %}Paused{% endif %}</span><strong>{{ monitor.name }}</strong><small>{% if monitor.is_active and monitor.last_response_ms %}{{ monitor.last_response_ms }} ms{% elif not monitor.is_active %}Monitoring paused{% else %}No check yet{% endif %}</small></a>{% empty %}<div class="project-empty">No services in this project yet.</div>{% endfor %}</div>{% if can_manage_monitors or can_manage_projects or project.status_page_enabled %}<footer>{% if can_manage_monitors %}<a href="{% url 'monitor_create' project.id %}" data-record-modal data-record-title="Add service">{% include "monitors/icon.html" with name="add" %} Add service</a>{% endif %}{% if project.status_page_enabled %}<a href="{% url 'public_status' project.status_page_slug %}">Public status</a>{% endif %}{% if can_manage_projects %}<a href="{% url 'project_edit' project.id %}" data-record-modal data-record-title="Edit project">Edit project</a>{% endif %}</footer>{% endif %}</section>{% endfor %}</div>{% else %}<div class="overview-empty"><strong>No projects yet</strong><small>Create a project to start monitoring services.</small></div>{% endif %}
+    </article>
+  </section>
+</main>
+<script>
+(() => {
+  const initializeHealthChart = () => {
+    const canvas = document.getElementById('service-health-chart');
+    if (!canvas || !window.Chart) return;
+    const currentCount = name => Number(Array.from(document.querySelectorAll('[data-dashboard-count]')).find(node => node.dataset.dashboardCount === name)?.textContent || 0);
+    const chart = new Chart(canvas, {
+      type: 'doughnut',
+      data: { labels: ['Operational', 'Degraded / unknown', 'Down'], datasets: [{ data: [currentCount('up'), currentCount('other'), currentCount('down')], backgroundColor: ['#16a34a', '#f59e0b', '#dc2626'], hoverBackgroundColor: ['#15803d', '#d97706', '#b91c1c'], borderColor: document.documentElement.dataset.theme === 'dark' ? '#1b2534' : '#fff', borderWidth: 3, borderRadius: 5, spacing: 2 }] },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false }, tooltip: { callbacks: { title: () => '', label: item => ` ${item.label}: ${item.raw} service${item.raw === 1 ? '' : 's'}` } } } }
+    });
+    document.addEventListener('themechange', event => {
+      chart.data.datasets[0].borderColor = event.detail.theme === 'dark' ? '#1b2534' : '#fff';
+      chart.update('none');
+    });
+  };
+
+  const loadHealthChartLibrary = () => {
+    if (window.Chart) {
+      initializeHealthChart();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js';
+    script.crossOrigin = 'anonymous';
+    script.onload = initializeHealthChart;
+    document.head.appendChild(script);
+  };
+
+  // Wait for final layout dimensions, and load Chart.js even when the response
+  // chart has no samples (that component otherwise has no reason to load it).
+  requestAnimationFrame(() => requestAnimationFrame(loadHealthChartLibrary));
+})();
+</script>
+<script>
+(() => {
+  const dashboard = document.querySelector('.overview-dashboard[data-status-url]');
+  if (!dashboard) return;
+  const statusUrl = dashboard.dataset.statusUrl;
+  const notificationMenu = dashboard.querySelector('.incident-notifications');
+  document.addEventListener('click', event => {
+    if (notificationMenu?.open && !notificationMenu.contains(event.target)) notificationMenu.open = false;
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && notificationMenu?.open) notificationMenu.open = false;
+  });
+  const refreshIntervalSelect = dashboard.querySelector('[data-dashboard-refresh-interval]');
+  const refreshNowButton = dashboard.querySelector('[data-dashboard-refresh-now]');
+  const refreshIntervalStorageKey = 'site-monitoring-dashboard-refresh-ms';
+  const validRefreshIntervals = new Set([60000, 120000, 300000, 600000]);
+  let refreshIntervalMs = 60000;
+  try {
+    const savedInterval = Number(window.localStorage.getItem(refreshIntervalStorageKey));
+    if (validRefreshIntervals.has(savedInterval)) refreshIntervalMs = savedInterval;
+  } catch (error) {
+    // Keep the default interval when browser storage is unavailable.
+  }
+  if (refreshIntervalSelect) refreshIntervalSelect.value = String(refreshIntervalMs);
+  const updatedAt = dashboard.querySelector('[data-dashboard-updated]');
+  let lastUpdatedAt = updatedAt ? Date.parse(updatedAt.dateTime) : Date.now();
+  if (!Number.isFinite(lastUpdatedAt)) lastUpdatedAt = Date.now();
+  const renderUpdatedAge = () => {
+    if (!updatedAt) return;
+    let seconds = Math.max(0, Math.floor((Date.now() - lastUpdatedAt) / 1000));
+    const parts = [];
+    for (const [unitSeconds, unitName] of [[86400, 'day'], [3600, 'hour'], [60, 'minute']]) {
+      const amount = Math.floor(seconds / unitSeconds);
+      if (amount) parts.push(`${amount} ${unitName}${amount === 1 ? '' : 's'}`);
+      seconds %= unitSeconds;
+    }
+    if (seconds || !parts.length) parts.push(`${seconds} second${seconds === 1 ? '' : 's'}`);
+    updatedAt.textContent = `${parts.join(' ')} ago`;
+    updatedAt.title = new Date(lastUpdatedAt).toLocaleString();
+  };
+  renderUpdatedAge();
+  const ageTimer = window.setInterval(renderUpdatedAge, 1000);
+  let requestInFlight = false;
+
+  const refreshStatus = async () => {
+    if (document.visibilityState !== 'visible' || requestInFlight) return;
+    requestInFlight = true;
+    try {
+      const requestUrl = new URL(statusUrl, window.location.href);
+      requestUrl.searchParams.set('range', dashboard.dataset.chartRange || '1');
+      const response = await fetch(requestUrl, { credentials: 'same-origin', cache: 'no-store', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      if (!response.ok) return;
+      const snapshot = await response.json();
+      const { counts, monitors } = snapshot;
+      for (const [name, value] of Object.entries(counts)) {
+        dashboard.querySelectorAll(`[data-dashboard-count="${name}"]`).forEach(node => { node.textContent = value; });
+      }
+
+      const monitorById = new Map(monitors.map(monitor => [String(monitor.id), monitor]));
+      dashboard.querySelectorAll('[data-dashboard-monitor-id]').forEach(node => {
+        const monitor = monitorById.get(node.dataset.dashboardMonitorId);
+        if (!monitor) return;
+        const state = monitor.is_active ? monitor.status.toLowerCase() : 'paused';
+        node.classList.remove('up', 'down', 'suspect', 'unknown', 'paused');
+        node.classList.add(state);
+        const status = node.querySelector('.service-status');
+        if (status) status.lastChild.textContent = monitor.label;
+        const responseTime = node.querySelector('small');
+        if (responseTime) responseTime.textContent = !monitor.is_active ? 'Monitoring paused' : monitor.last_response_ms != null ? `${monitor.last_response_ms} ms` : 'No check yet';
+      });
+
+      const downServices = monitors.filter(monitor => monitor.is_active && monitor.status === 'DOWN')
+        .sort((a, b) => a.name.localeCompare(b.name));
+      const attentionServices = monitors.filter(monitor => !monitor.is_active || (monitor.status !== 'UP' && monitor.status !== 'DOWN'))
+        .sort((a, b) => (!a.is_active ? 0 : 1) - (!b.is_active ? 0 : 1) || a.name.localeCompare(b.name));
+      const attention = dashboard.querySelector('[data-attention-summary]');
+      const downGroup = dashboard.querySelector('[data-attention-group="down"]');
+      const otherGroup = dashboard.querySelector('[data-attention-group="attention"]');
+      const healthy = dashboard.querySelector('[data-attention-healthy]');
+      attention.dataset.activeGroups = String(Number(downServices.length > 0) + Number(attentionServices.length > 0));
+      downGroup.hidden = downServices.length === 0;
+      otherGroup.hidden = attentionServices.length === 0;
+      healthy.hidden = downServices.length + attentionServices.length > 0;
+      attention.hidden = counts.total > 0 && downServices.length === 0 && attentionServices.length === 0;
+      const downCount = dashboard.querySelector('[data-attention-count="down"]');
+      const otherCount = dashboard.querySelector('[data-attention-count="attention"]');
+      downCount.textContent = `${downServices.length} service${downServices.length === 1 ? '' : 's'} down${downServices.length > 8 ? ' · showing 8' : ''}`;
+      otherCount.textContent = `${attentionServices.length} service${attentionServices.length === 1 ? '' : 's'} need attention${attentionServices.length > 8 ? ' · showing 8' : ''}`;
+      dashboard.querySelector('[data-attention-healthy-heading]').textContent = counts.total ? 'All systems operational' : 'Monitoring not set up';
+      dashboard.querySelector('[data-attention-healthy-count]').textContent = counts.total ? `All ${counts.total} monitored services responding normally` : 'Add a service to start monitoring your workspace';
+      const renderAffectedServices = (list, services, type) => {
+        list.replaceChildren();
+        for (const monitor of services.slice(0, 8)) {
+          const item = document.createElement('a');
+          item.className = `attention-service ${type === 'down' ? 'down' : !monitor.is_active ? 'paused' : 'attention'}`;
+          item.href = monitor.detail_url;
+          item.dataset.alertMonitorId = monitor.id;
+          const state = document.createElement('span');
+          state.className = 'attention-status';
+          state.textContent = type === 'down' ? 'Down' : monitor.label;
+          const name = document.createElement('strong');
+          name.textContent = monitor.name;
+          const project = document.createElement('small');
+          project.textContent = `${monitor.project_name}${monitor.last_response_ms != null ? ` · ${monitor.last_response_ms} ms` : ''}`;
+          item.append(state, name, project);
+          list.append(item);
+        }
+      };
+      renderAffectedServices(dashboard.querySelector('[data-attention-list="down"]'), downServices, 'down');
+      renderAffectedServices(dashboard.querySelector('[data-attention-list="attention"]'), attentionServices, 'attention');
+
+      const chartCanvas = document.getElementById('service-health-chart');
+      const healthChart = chartCanvas && window.Chart ? Chart.getChart(chartCanvas) : null;
+      if (healthChart) {
+        healthChart.data.datasets[0].data = [counts.up, counts.other, counts.down];
+        healthChart.update('none');
+        chartCanvas.setAttribute('aria-label', `Service health: ${counts.up} operational, ${counts.other} paused, degraded or unknown, ${counts.down} down`);
+      }
+      document.dispatchEvent(new CustomEvent('dashboard:chart-refresh', { detail: snapshot }));
+      if (updatedAt) {
+        const now = new Date();
+        updatedAt.dateTime = now.toISOString();
+        lastUpdatedAt = now.getTime();
+        renderUpdatedAge();
+      }
+
+      const notificationSummary = dashboard.querySelector('.incident-notifications summary');
+      if (notificationSummary) {
+        notificationSummary.setAttribute('aria-label', `Recent incidents, ${counts.incidents} open`);
+        let badge = notificationSummary.querySelector('[data-notification-count]');
+        if (counts.incidents && !badge) {
+          badge = document.createElement('span');
+          badge.className = 'notification-count';
+          badge.dataset.notificationCount = '';
+          notificationSummary.append(badge);
+        }
+        if (badge) {
+          badge.textContent = counts.incidents;
+          badge.hidden = counts.incidents === 0;
+        }
+      }
+    } catch (error) {
+      // Keep the last good dashboard snapshot if polling fails temporarily.
+    } finally {
+      requestInFlight = false;
+    }
+  };
+
+  let timer = window.setInterval(refreshStatus, refreshIntervalMs);
+  const scheduleRefresh = () => {
+    window.clearInterval(timer);
+    timer = window.setInterval(refreshStatus, refreshIntervalMs);
+  };
+  refreshIntervalSelect?.addEventListener('change', () => {
+    const selectedInterval = Number(refreshIntervalSelect.value);
+    if (!validRefreshIntervals.has(selectedInterval)) return;
+    refreshIntervalMs = selectedInterval;
+    try {
+      window.localStorage.setItem(refreshIntervalStorageKey, String(refreshIntervalMs));
+    } catch (error) {
+      // The selected interval still applies for this page if storage is unavailable.
+    }
+    scheduleRefresh();
+    refreshStatus();
+  });
+  refreshNowButton?.addEventListener('click', refreshStatus);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshStatus();
+  });
+  window.addEventListener('pagehide', () => { window.clearInterval(timer); window.clearInterval(ageTimer); }, { once: true });
+})();
+</script>
+<style>
+.attention-summary{display:grid;gap:0;color:var(--ink)}
+.attention-summary[hidden]{display:none!important}
+.attention-group-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.attention-summary[data-active-groups="1"] .attention-group-grid{grid-template-columns:1fr}
+.attention-group[hidden],.attention-healthy[hidden]{display:none}
+.attention-group,.attention-healthy{display:grid;grid-template-columns:minmax(0,1fr);align-content:start;gap:10px;min-width:0;padding:13px 16px;border:1px solid #f3d49a;border-radius:12px;background:#fff8e8}
+.attention-group-down{border-color:#f2b8b5;background:#fff4f3}
+.attention-healthy{grid-template-columns:minmax(0,1fr) auto;align-items:center;border-color:#b7e4c2;background:#f0faf2}
+.attention-group>header,.attention-healthy{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.attention-summary-message{display:flex;align-items:center;gap:11px;min-width:0}
+.attention-summary-message>div{display:grid;gap:2px;min-width:0}
+.attention-indicator{display:block;flex:0 0 10px;width:10px;height:10px;border-radius:50%;background:#f59e0b;box-shadow:0 0 0 4px #f59e0b20}
+.attention-group-down .attention-indicator{background:#dc2626;box-shadow:0 0 0 4px #dc262620}
+.attention-healthy .attention-indicator{background:#16a34a;box-shadow:0 0 0 4px #16a34a20}
+.attention-group>header strong,.attention-healthy strong{font-size:13px}
+.attention-group>header small,.attention-group>header>a,.attention-healthy small,.attention-healthy>a{color:var(--muted);font-size:10px}
+.attention-group>header>a,.attention-healthy>a{color:#1a73e8;font-weight:650}
+.attention-group-down>header>a{color:#b42318}
+.attention-healthy>a{color:#15803d}
+.attention-service-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:7px}
+.attention-service{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:3px 9px;min-width:0;padding:9px 10px;border:1px solid #f0d6a6;border-radius:9px;background:#fff;color:var(--ink)}
+.attention-service:hover{border-color:#e3b85e;background:#fffdf7}
+.attention-service .attention-status{grid-column:1;grid-row:1/3;padding:4px 7px;border-radius:99px;background:#fff0cf;color:#9a5700;font-size:9px;font-weight:700}
+.attention-service.down{border-color:#f2c6c6;background:#fff5f4}
+.attention-service.down .attention-status{background:#fee2e0;color:#b42318}
+.attention-service.paused{border-color:#d7dee8;background:#f6f8fb}
+.attention-service.paused .attention-status{background:#e8edf4;color:#475569}
+.attention-service strong{overflow:hidden;font-size:11px;text-overflow:ellipsis;white-space:nowrap}
+.attention-service small{overflow:hidden;color:var(--muted);font-size:9px;text-overflow:ellipsis;white-space:nowrap}
+html[data-theme="dark"] .attention-group{border-color:#70552b;background:#302819;color:#e5eaf3}
+html[data-theme="dark"] .attention-group-down{border-color:#75404a;background:#302027}
+html[data-theme="dark"] .attention-healthy{border-color:#285b47;background:#172b25;color:#e5eaf3}
+html[data-theme="dark"] .attention-service{border-color:#70552b;background:#382d1d;color:#e5eaf3}
+html[data-theme="dark"] .attention-service.down{border-color:#75404a;background:#40252c}
+html[data-theme="dark"] .attention-service.paused{border-color:#43516a;background:#283344}
+html[data-theme="dark"] .attention-service small,html[data-theme="dark"] .attention-group>header small,html[data-theme="dark"] .attention-healthy small{color:#aab6c8}
+html[data-theme="dark"] .attention-service .attention-status{background:#4a3920;color:#ffcf70}
+html[data-theme="dark"] .attention-service.down .attention-status{background:#573039;color:#ffb4ab}
+html[data-theme="dark"] .attention-service.paused .attention-status{background:#374459;color:#c3ccda}
+.overview-heading .overview-actions{flex-direction:column;align-items:flex-end;gap:7px}.overview-updated{display:block;margin:0;color:var(--muted);font-size:12px;text-align:right;white-space:nowrap}.overview-updated time{font-variant-numeric:tabular-nums}
+.overview-refresh-controls{display:grid;justify-items:end;gap:5px}.overview-refresh-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:7px 10px}
+.overview-refresh-now{padding:5px 2px;border:0;background:transparent;color:#2563eb;font:inherit;font-size:11px;font-weight:650;cursor:pointer}.overview-refresh-now:hover{text-decoration:underline}.overview-refresh-now:focus-visible{outline:2px solid #2563eb;outline-offset:2px;border-radius:4px}
+.overview-refresh-select{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11px;white-space:nowrap}.overview-refresh-select select{min-height:30px;padding:5px 26px 5px 9px;border:1px solid var(--line);border-radius:7px;background-color:#fff;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;appearance:none;color:var(--ink);font:inherit;font-size:11px;cursor:pointer}.overview-refresh-select select:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
+html[data-theme="dark"] .overview-refresh-select select{border-color:#35445a;background-color:#111a29;color:#d7e3f4}
+
+.overview-refresh-select select option{background:#fff;color:#17263d}html[data-theme="dark"] .overview-refresh-select select option{background:#111a29;color:#d7e3f4}
+.overview-dashboard{display:grid;gap:16px;width:100%;max-width:1400px;margin:0 auto;color:var(--ink)}
+.overview-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}.overview-eyebrow{color:var(--muted);font-size:11px;font-weight:600}.overview-heading h1{margin:4px 0 0;font-size:26px;line-height:1.2;letter-spacing:-.5px}.overview-heading p,.overview-card-head p{margin:5px 0 0;color:var(--muted);font-size:12px}.overview-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.overview-kpi{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;align-items:center;gap:5px 14px;min-width:0;min-height:88px;padding:15px 18px;border:1px solid transparent;border-radius:12px;background:var(--metric-bg)}.overview-kpi span{grid-column:1;grid-row:1;color:var(--metric-color);font-size:13px;font-weight:700;line-height:1.3}.overview-kpi strong{grid-column:2;grid-row:1/3;justify-self:end;color:var(--metric-color);font-size:36px;line-height:1;font-weight:750;font-variant-numeric:tabular-nums}.overview-kpi small{grid-column:1;grid-row:2;color:var(--metric-color);font-size:11px;line-height:1.35;opacity:.82}.kpi-blue{--metric-color:#2563eb;--metric-bg:#eaf1ff}.kpi-green{--metric-color:#15803d;--metric-bg:#eaf7ee}.kpi-amber{--metric-color:#b45309;--metric-bg:#fff4df}.kpi-red{--metric-color:#dc2626;--metric-bg:#ffeded}
+.overview-grid{display:grid;grid-template-columns:minmax(280px,4fr) minmax(0,8fr);gap:14px}.overview-card{min-width:0;padding:16px;border:1px solid var(--line);border-radius:12px;background:#fff;box-shadow:0 1px 3px #14213d0d}.overview-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.overview-card-head h2{margin:0;font-size:14px;line-height:1.35}.overview-card-head p{font-size:11px}.overview-chip{flex:none;padding:5px 9px;border-radius:99px;background:#eff3f8;color:#475569;font-size:10px;font-weight:650}.health-card,.service-chart-card{min-height:205px}.health-content{display:grid;grid-template-columns:minmax(110px,150px) minmax(0,1fr);align-items:center;gap:20px;min-height:145px}.health-chart-wrap{position:relative;width:min(100%,142px);aspect-ratio:1;margin:auto}.health-chart-wrap canvas{display:block;width:100%!important;height:100%!important}.health-chart-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}.health-chart-center strong{color:var(--ink);font-size:23px;line-height:1.05;font-variant-numeric:tabular-nums}.health-chart-center span{margin-top:3px;color:var(--muted);font-size:10px}.health-legend{display:grid;gap:12px}.health-legend a{display:grid;grid-template-columns:9px minmax(0,1fr) auto;align-items:center;gap:8px;color:var(--muted);font-size:11px}.health-legend a:hover span{color:var(--ink)}.health-legend strong{color:var(--ink);font-size:12px;font-variant-numeric:tabular-nums}.health-dot{width:8px;height:8px;border-radius:50%}.dot-up{background:#16a34a}.dot-attention{background:#f59e0b}.dot-down{background:#dc2626}.service-chart-canvas{position:relative;width:100%;max-width:100%;min-width:0;height:210px;overflow:hidden}.service-chart-canvas canvas{display:block!important;width:100%!important;max-width:100%!important;height:100%!important}.chart-card-head{align-items:center}.chart-range-form{flex:none;margin:0}.chart-range-form select{min-height:34px;max-width:145px;padding:6px 28px 6px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);font:inherit;font-size:11px}.chart-axis-labels{display:flex;justify-content:space-between;padding:3px 4px 0;color:var(--muted);font-size:9px}.chart-legend{display:flex;flex-wrap:wrap;gap:8px 14px;padding-top:11px}.chart-legend>span{display:inline-flex;align-items:center;gap:5px;max-width:180px;overflow:hidden;color:var(--muted);font-size:10px;text-overflow:ellipsis;white-space:nowrap}.chart-legend i{flex:none;width:8px;height:8px;border-radius:50%}.chart-legend small{color:var(--ink);font-size:9px}.service-chart-wrap{min-width:0}.overview-empty{display:flex;min-height:130px;align-items:center;justify-content:center;flex-direction:column;gap:5px;color:var(--muted);font-size:11px;text-align:center}.overview-empty strong{color:var(--ink);font-size:12px}.overview-empty small{font-size:10px}.overview-link{flex:none;color:#2563eb;font-size:11px;font-weight:600}.projects-card{grid-column:1/-1;min-height:230px}.overview-actions{display:flex;align-items:center;gap:9px}.incident-notifications{position:relative}.incident-notifications>summary{position:relative;display:grid;place-items:center;width:38px;height:38px;border:1px solid var(--line);border-radius:10px;background:#fff;color:#475569;cursor:pointer;list-style:none}.incident-notifications>summary::-webkit-details-marker{display:none}.incident-notifications>summary:hover,.incident-notifications[open]>summary{border-color:#bfdbfe;background:#f8fbff;color:#2563eb}.notification-icon svg{width:18px;height:18px}.notification-count{position:absolute;top:-5px;right:-5px;display:grid;place-items:center;min-width:17px;height:17px;padding:0 4px;border:2px solid #f5f7fb;border-radius:99px;background:#dc2626;color:#fff;font-size:9px;font-weight:700}.notification-popover{position:absolute;z-index:20;top:calc(100% + 9px);right:0;width:min(370px,calc(100vw - 32px));padding:12px;border:1px solid var(--line);border-radius:12px;background:#fff;box-shadow:0 12px 32px #14213d24}.notification-popover>header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:3px 3px 10px;border-bottom:1px solid #edf0f4}.notification-popover>header div{display:grid;gap:2px}.notification-popover>header strong{font-size:12px}.notification-popover>header small,.notification-popover>header a{color:var(--muted);font-size:10px}.notification-popover>header a{color:#2563eb;font-weight:600}.notification-list{display:grid;max-height:290px;overflow:auto}.notification-row{display:grid;grid-template-columns:8px minmax(0,1fr) auto;align-items:center;gap:9px;padding:10px 3px;border-bottom:1px solid #f0f2f5}.notification-row:last-child{border-bottom:0}.notification-row>span:nth-child(2){display:grid;gap:3px;min-width:0}.notification-row strong{overflow:hidden;color:var(--ink);font-size:11px;text-overflow:ellipsis;white-space:nowrap}.notification-row small{color:var(--muted);font-size:9px}.notification-row em{color:var(--muted);font-size:9px;font-style:normal}.notification-dot{width:8px;height:8px;border-radius:50%;background:#dc2626}.notification-dot.resolved{background:#16a34a}.notification-dot.monitoring{background:#0284c7}.notification-empty{padding:18px 5px;margin:0;color:var(--muted);font-size:11px;text-align:center}
+.project-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start;gap:10px}.project-panel{min-width:0;padding:11px;border:1px solid var(--line);border-radius:10px;background:#fff}.project-panel>header{display:flex;align-items:center;gap:8px;padding-bottom:9px;border-bottom:1px solid #edf0f4}.project-symbol{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:9px;background:#eff6ff;color:#2563eb}.project-symbol svg{width:19px;height:19px}.project-name{display:grid;flex:1;min-width:0;gap:2px}.project-name strong,.project-name small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-name strong{color:var(--ink);font-size:11px}.project-name small{color:var(--muted);font-size:9px}.project-count{flex:none;padding:4px 7px;border-radius:99px;background:#eff3f8;color:#475569;font-size:9px}.project-services{display:grid;gap:5px;padding-top:8px}.project-service{display:grid;grid-template-columns:72px minmax(0,1fr) auto;align-items:center;gap:7px;padding:7px 8px;border:1px solid #e8edf3;border-radius:7px;background:#f8fafc}.project-service.up{border-color:#bbebca!important;background:#effaf2!important}.project-service.down{border-color:#f2c6c6!important;background:#fff1f1!important}.project-service.suspect,.project-service.unknown{border-color:#f2d59f!important;background:#fff8e8!important}.project-service.paused{border-color:#d7dee8!important;background:#eef2f7!important}.service-status{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:9px}.service-status i{width:7px;height:7px;border-radius:50%;background:#94a3b8}.project-service.up .service-status{color:#15803d}.project-service.up .service-status i{background:#16a34a}.project-service.down .service-status{color:#b91c1c}.project-service.down .service-status i{background:#dc2626}.project-service.suspect .service-status,.project-service.unknown .service-status{color:#a16207}.project-service.suspect .service-status i,.project-service.unknown .service-status i{background:#f59e0b}.project-service.paused .service-status{color:#475569}.project-service.paused .service-status i{background:#64748b}.project-service>strong{overflow:hidden;color:var(--ink);font-size:10px;text-overflow:ellipsis;white-space:nowrap}.project-service>small{color:var(--muted);font-size:9px;white-space:nowrap}.project-empty{padding:12px;color:var(--muted);font-size:10px}.project-panel>footer{display:flex;flex-wrap:wrap;gap:12px;padding-top:8px;margin-top:8px;border-top:1px solid #edf0f4}.project-panel>footer a{display:inline-flex;align-items:center;gap:4px;color:#2563eb;font-size:10px;font-weight:600}.project-panel>footer svg{width:13px;height:13px}
+@media(max-width:1100px){.overview-grid{grid-template-columns:minmax(240px,5fr) minmax(0,7fr)}.project-grid{grid-template-columns:1fr}}
+@media(max-width:760px){.overview-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-grid{grid-template-columns:1fr}.attention-group-grid{grid-template-columns:1fr}.health-card,.service-chart-card,.projects-card{min-height:0}.project-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.overview-heading{align-items:flex-start;flex-direction:column}.overview-heading h1{font-size:22px}.overview-kpis{gap:8px}.overview-kpi{padding:11px}.overview-card{padding:13px}.project-grid{grid-template-columns:1fr}.notification-popover{right:-4px}.project-service{grid-template-columns:66px minmax(0,1fr) auto}}
+</style>
+<style>
+/* Keep summary labels readable while preserving the status-tinted cards. */
+.overview-kpi span{color:#263449}
+.overview-kpi small{color:#526176;opacity:1}
+.overview-kpi.kpi-blue{border-color:#c7d8ff}
+.overview-kpi.kpi-green{border-color:#c5e5cf}
+.overview-kpi.kpi-amber{border-color:#f1d9a8}
+.overview-kpi.kpi-red{border-color:#f1c9c9}
+.overview-grid{grid-template-columns:minmax(280px,1fr) minmax(0,3fr)}
+.health-content{display:grid;grid-template-columns:1fr;justify-items:center;gap:12px;padding:2px 0 4px}
+.health-chart-wrap{width:min(100%,138px);margin:0 auto}
+.health-chart-center strong{color:#17263d;font-size:24px}
+.health-chart-center span{color:#526176}
+.health-chart-wrap{width:min(100%,158px);height:158px;aspect-ratio:1;min-width:0}
+.health-chart-wrap canvas{width:100%!important;height:100%!important}
+.health-legend{display:grid;width:100%;gap:0}
+.health-legend a{padding:8px 2px;border-top:1px solid #edf0f4;color:#526176}
+.health-legend strong{color:#263449;font-variant-numeric:tabular-nums}
+.project-name>a{text-decoration:none}.project-name>a:hover strong{color:#2563eb;text-decoration:underline}
+@media(max-width:520px){.health-chart-wrap{width:min(100%,158px);height:158px}}
+@media(max-width:1100px){.overview-grid{grid-template-columns:minmax(240px,5fr) minmax(0,7fr)}}
+@media(max-width:760px){.overview-grid{grid-template-columns:1fr}}
+.projects-header-actions{display:flex;align-items:center;gap:14px;flex:none}.overview-card-head .projects-create-btn{min-height:32px!important;padding:6px 10px!important;border-color:#bfdbfe!important;border-radius:8px!important;background:#f8fbff!important;color:#1d4ed8!important;font-size:11px!important;white-space:nowrap}.overview-card-head .projects-create-btn svg{width:14px;height:14px}
+/* Give the doughnut canvas the full card width so Chart.js tooltips do not get clipped. */
+.health-chart-wrap{width:100%;max-width:none;height:190px;aspect-ratio:auto;margin:0;min-width:0}
+.health-chart-wrap canvas{display:block;width:100%!important;height:100%!important}
+@media(max-width:520px){.health-chart-wrap{height:180px}}
+</style>
+{% endblock %}

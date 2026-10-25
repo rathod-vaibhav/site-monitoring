@@ -1,0 +1,7 @@
+<div class="listing-search-control" data-listing-search>
+  <label class="sr-only" for="{{ search_input_id|default:'listing-search-input' }}">Search this list</label>
+  <input id="{{ search_input_id|default:'listing-search-input' }}" type="search" name="q" value="{{ search_query }}" placeholder="Search or type a field name…" aria-label="Search this list" aria-autocomplete="list" aria-expanded="false" aria-controls="listing-search-suggestions" autocomplete="off" data-listing-search-input>
+  <div class="listing-search-suggestions" id="listing-search-suggestions" role="listbox" hidden>
+    {% for field in search_fields %}<button type="button" class="listing-search-option" role="option" data-search-key="{{ field.key }}"><span>{{ field.label }}</span><code>{{ field.key }}:</code></button>{% endfor %}
+  </div>
+</div>
