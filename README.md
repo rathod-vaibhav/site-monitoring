@@ -237,9 +237,9 @@ python manage.py test_email recipient@example.com
 - Run this monitor on infrastructure separate from the sites it checks. Back up `db.sqlite3` and protect it: it contains accounts, monitoring history, incidents, and alert configuration.
 - Avoid placing usernames, passwords, or tokens in monitored URLs. Configure only targets you are authorized to monitor.
 
-## Fees and license
+## Fees
 
-The application does not include a billing, subscription, or per-monitor fee system. Hosting, domain, SMTP/email delivery, and backups may have provider charges. This repository does not include a `LICENSE` file, so its code should be treated as privately owned; obtain permission before redistributing it.
+The application does not include a billing, subscription, or per-monitor fee system. Hosting, domain, SMTP/email delivery, and backups may have provider charges.
 
 ---
 
